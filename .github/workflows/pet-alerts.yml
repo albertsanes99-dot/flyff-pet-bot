@@ -2,7 +2,7 @@ name: Pet Alerts
 
 on:
   schedule:
-    - cron: "*/1 * * * *"   # ejecuta cada 1 minuto (para pruebas)
+    - cron: "*/5 * * * *"   # ejecuta cada 1 minuto (para pruebas)
   workflow_dispatch:         # permite lanzarlo manualmente
 
 jobs:
