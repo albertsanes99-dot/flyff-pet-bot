@@ -14,8 +14,9 @@ STATE_FILE = "notified.json"          # Registro de avisos ya enviados
 COL_PET, COL_INICIO = "Pet", "Hora inicio"
 COL_HORAS, COL_MIN  = "Duración (horas)", "Duración (min)"
 
-# Margen para capturar finales que ocurren entre ejecuciones
-MARGEN_MINUTOS = 5     # <- ajusta aquí si quieres más/menos margen
+# Intervalo de ejecución (min). Usado para “acumular” finales entre corridas.
+# Ponlo a 30 si tu cron corre cada 30 min. Se puede sobreescribir con env.
+INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", "30"))
 
 # === Utilidades ===
 def enviar(texto: str):
@@ -54,7 +55,6 @@ def to_int_safe(x, default=0):
 
 # === Lógica principal ===
 def main():
-    # Carga estado previo
     estado = cargar_estado()
 
     # Lee la hoja
@@ -65,8 +65,9 @@ def main():
         if col not in df.columns:
             raise ValueError(f"Falta la columna '{col}' en la hoja.")
 
-    # GitHub Actions corre en UTC -> miramos 5 minutos hacia adelante
-    ahora = datetime.utcnow() + timedelta(minutes=MARGEN_MINUTOS)
+    # Ventana de acumulación: "lo que terminó en los últimos N minutos"
+    ahora = datetime.utcnow()
+    ventana_inicio = ahora - timedelta(minutes=INTERVALO_MINUTOS)
 
     for _, row in df.iterrows():
         try:
@@ -81,8 +82,9 @@ def main():
             fin = inicio + timedelta(hours=horas, minutes=minutos)
             clave = f"{pet}|{fin.isoformat()}"
 
-            # Si ya terminó (considerando el margen) y nunca avisamos, enviamos
-            if ahora >= fin and clave not in estado:
+            # Avisar solo si terminó en la ventana [ventana_inicio, ahora]
+            # y aún no fue notificado.
+            if ventana_inicio <= fin <= ahora and clave not in estado:
                 msg = (
                     f"🐣 Tu pet '{pet}' terminó su incubación 🎉\n"
                     f"⏰ Finalizó a las {fin.strftime('%Y-%m-%d %H:%M')} (UTC)"
@@ -93,7 +95,6 @@ def main():
         except Exception as e:
             print("Fila con error:", e)
 
-    # Guarda estado para evitar duplicados en próximas ejecuciones
     guardar_estado(estado)
 
 if __name__ == "__main__":
