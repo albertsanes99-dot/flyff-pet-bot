@@ -2,8 +2,12 @@ name: Pet Alerts
 
 on:
   schedule:
-    - cron: '*/5 * * * *'   # cada 5 min (pruebas)
+    - cron: '*/30 * * * *'   # cada 30 min
   workflow_dispatch:
+
+# Necesario para poder commitear notified.json
+permissions:
+  contents: write
 
 jobs:
   run:
@@ -11,6 +15,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -27,4 +34,19 @@ jobs:
           TOKEN: ${{ secrets.TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           EXCEL_URL: ${{ secrets.EXCEL_URL }}
+          # El script enviará todos los que terminaron en los últimos 30 min
+          INTERVALO_MINUTOS: '30'
         run: python run_once.py
+
+      - name: Persist notified.json
+        if: always()
+        run: |
+          if [[ -f notified.json ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add notified.json
+            if ! git diff --cached --quiet; then
+              git commit -m "Update notified.json [skip ci]"
+              git push
+            fi
+          fi
